@@ -3,7 +3,7 @@
 # 使用方式 ./generate_unsort_data.sh 100  生成100个数字
 cnt=10000
 if [ -n "$1"  ]; then
-cnt=$1
+    cnt=$1;
 fi
 echo $cnt
 rm -rf /tmp/seq.txt
