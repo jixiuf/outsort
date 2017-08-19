@@ -2,7 +2,6 @@ package outsort
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -32,13 +31,15 @@ func NewSort(bufferSize int) (s *Sort) {
 
 	return
 }
-func (s *Sort) Sort(inFileName, outFileName string) { // 传入待排序的文件(文件每行一个int数字)，及排序后存放结果的文件
+func (s *Sort) Sort(inFileName, outFileName string) error { // 传入待排序的文件(文件每行一个int数字)，及排序后存放结果的文件
 	s.inFileName = inFileName
 	s.outFileName = outFileName
 	err := s.initSort()
-	fmt.Println(s.tmpFileNames)
-	s.mergeSort()
-	fmt.Println(err)
+	if err != nil {
+		return err
+	}
+
+	return s.mergeAll()
 }
 
 func (s *Sort) initSort() (err error) { //
@@ -52,7 +53,7 @@ func (s *Sort) initSort() (err error) { //
 	defer reader.Close()
 
 	for {
-		err := reader.Read()
+		err := reader.ReRead()
 		if err != nil && err != io.EOF { // 出错
 			return err
 		}
@@ -79,7 +80,7 @@ func (s *Sort) initSort() (err error) { //
 	return nil
 
 }
-func (s *Sort) mergeSort() (err error) { //
+func (s *Sort) mergeAll() (err error) { //
 	if len(s.tmpFileNames) == 0 {
 		return errors.New("no data to merge and sort")
 	}
@@ -120,35 +121,47 @@ func (s *Sort) mergeTwoFiles(tmpFileName1, tmpFileName2 string) (newTmpFileName 
 	defer tmpFileWriter.Close()
 	s.merge(leftReader, rightReader, tmpFileWriter)
 	// merge之后，删除tmpFileName1  tmpFileName2 两个临时文件，不再有用
-	// os.Remove(tmpFileName1)
-	// os.Remove(tmpFileName2)
+	os.Remove(tmpFileName1)
+	os.Remove(tmpFileName2)
 
 	return
 
 }
 func (s *Sort) merge(leftReader, rightReader *Reader, tmpFileWriter *Writer) { //
-	var leftArr, rightArr IntSlice
 	for {
 		s.resultBuffer = s.resultBuffer[0:0] // 将buffer缩为长度0
-		if !leftReader.IsEOF() {
-			leftReader.Read() // 从文件读取bufferSize个数字
-			leftArr = leftReader.Data()
-		} else {
-			leftArr = nil
-		}
-		if !rightReader.IsEOF() {
-			rightReader.Read() // 从文件读取bufferSize个数字
-			rightArr = rightReader.Data()
-		} else {
-			rightArr = nil
-		}
-		Merge(leftArr, rightArr, &(s.resultBuffer)) // 内存内归并两个数组
-		tmpFileWriter.Write(s.resultBuffer)         // 将归并后的数组写回到文件
 		if leftReader.IsEOF() && rightReader.IsEOF() {
-			break // 两个文件都已经读到末尾
+			break // 已有文件读到末尾
 		}
 
+		leftReader.Read()  // 从文件读取内容填充满 leftReader.buffer
+		rightReader.Read() // 从文件读取内容填充满 rightReader.buffer
+
+		Merge(&(leftReader.buffer), &(rightReader.buffer), &(s.resultBuffer)) // 内存内归并两个数组
+		tmpFileWriter.Write(s.resultBuffer)                                   // 将归并后的数组写回到文件
+		if len(s.resultBuffer) == 0 {                                         // 合并的结果为空，说明至少有一个队列已经掏空，此时只需要把另一个队列的内容append 到最后即可
+			if leftReader.IsEOF() && len(leftReader.buffer) == 0 {
+				tmpFileWriter.Write(rightReader.buffer) //
+				rightReader.Reset()
+			}
+			if rightReader.IsEOF() && len(rightReader.buffer) == 0 {
+				tmpFileWriter.Write(leftReader.buffer) //
+				leftReader.Reset()
+			}
+		}
 	}
+
+	for !leftReader.IsEOF() || len(leftReader.buffer) != 0 {
+		leftReader.Read()
+		tmpFileWriter.Write(leftReader.buffer)
+		leftReader.Reset()
+	}
+	for !rightReader.IsEOF() || len(rightReader.buffer) != 0 {
+		rightReader.Read()
+		tmpFileWriter.Write(rightReader.buffer)
+		rightReader.Reset()
+	}
+
 	return
 }
 func (s *Sort) getTmpFileName() string { //

@@ -35,33 +35,33 @@ func (l IntSlice) Swap(i, j int) {
 // 此处仅做归并
 // 请确保在调用前result 的cap>=len(left)+left(right)
 // 之所以将result传进来，而不直接return过去,是为了重用result原来的内存，避免新的内存分配
-func Merge(left, right IntSlice, result *IntSlice) { //
-	if left == nil && right != nil {
-		*result = (*result)[0:len(right)]
-		copy(*result, right)
+func Merge(left, right *IntSlice, result *IntSlice) { //
+	if len(*right) == 0 || len(*left) == 0 {
 		return
 	}
-	if right == nil && left != nil {
-		*result = (*result)[0:len(left)]
-		copy(*result, left)
-		return
-
-	}
-
-	*result = make(IntSlice, 0, len(left)+len(right))
 
 	l, r := 0, 0
-	for l < len(left) && r < len(right) {
-		if left[l] < right[r] {
-			*result = append(*result, left[l])
+	for l < len(*left) && r < len(*right) {
+		if (*left)[l] < (*right)[r] {
+			*result = append(*result, (*left)[l])
 			l++
 		} else {
-			*result = append(*result, right[r])
+			*result = append(*result, (*right)[r])
 			r++
 		}
 	}
-	*result = append(*result, left[l:]...)
-	*result = append(*result, right[r:]...)
+
+	// 后面不再直接把剩余的元素直接append的结尾，因为
+	// 后续的元素还需要与文件中未读的元素进行排序
+	// *result = append(*result, *left[l:]...)
+	// *result = append(*result, (*right)[r:]...)
+
+	// 把未排序的部分，移动到前列(即清除掉已经合并到result的部分)
+	copy(*left, (*left)[l:])
+	*left = (*left)[0:len((*left)[l:])]
+	copy(*right, (*right)[r:])
+	*right = (*right)[0:len((*right)[r:])]
+
 	return
 
 }

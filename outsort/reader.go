@@ -11,6 +11,7 @@ import (
 
 // 从文件读取指定长度的数组放到 reader.buffer中
 type Reader struct {
+	bufSize     int
 	buffer      IntSlice
 	fileHandler *os.File
 	lineScanner *bufio.Scanner // reader line by line
@@ -25,7 +26,8 @@ func NewReader(fileName string, bufSize int) (reader *Reader, err error) {
 	}
 
 	reader = &Reader{
-		buffer:      make(IntSlice, bufSize, bufSize),
+		bufSize:     bufSize,
+		buffer:      make(IntSlice, 0, bufSize),
 		fileHandler: fileHandler,
 		lineScanner: bufio.NewScanner(fileHandler),
 		pos:         0,
@@ -48,27 +50,38 @@ func (r *Reader) Data() (arr IntSlice) {
 func (r *Reader) IsEOF() bool {
 	return r.isEOF
 }
+func (r *Reader) Reset() {
+	r.buffer = r.buffer[0:0]
+}
+func (r *Reader) ReRead() error {
+	r.buffer = r.buffer[0:0]
+	return r.Read()
+}
 
-// 从文件中读取buffer对应长度的数据，放到buffer中，尽可能的填充满buffer
+// 从文件中读取buffer对应长度的数据，放到buffer中，尽可能的填充满buffer(达到cap(buffer)后 就不到继续读取)
+// 注意buffer中可能已经有部分内容，这部分内容会保留,
 func (r *Reader) Read() (err error) {
 	if r.fileHandler == nil {
 		return errors.New("read error:no file handler")
 	}
 	if r.isEOF {
-		r.buffer = r.buffer[0:0] //
+		// r.buffer = r.buffer[0:0] //
 		return io.EOF
 	}
 
-	r.buffer = r.buffer[0:cap(r.buffer)] //
-	var idx int
-	if len(r.buffer) < 1 {
+	// r.buffer = r.buffer[0:cap(r.buffer)] //
+	if cap(r.buffer) < 1 {
 		return io.EOF
 	}
 
 	var scanSucc bool
 	for { // read line by line
+		if len(r.buffer) >= cap(r.buffer) {
+			break
+		}
 		scanSucc = r.lineScanner.Scan()
 		if !scanSucc {
+			r.isEOF = true
 			break
 		}
 
@@ -79,17 +92,9 @@ func (r *Reader) Read() (err error) {
 
 		value, err := strconv.Atoi(line)
 		if err == nil {
-			r.buffer[idx] = int32(value)
-			idx++
+			r.buffer = append(r.buffer, int32(value))
 		}
-		if idx >= cap(r.buffer) {
-			break
-		}
-	}
-	if !scanSucc {
-		r.isEOF = true
 	}
 
-	r.buffer = r.buffer[0:idx]
-	return r.lineScanner.Err()
+	return nil
 }
