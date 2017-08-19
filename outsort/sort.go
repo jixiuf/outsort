@@ -34,12 +34,13 @@ func NewSort(bufferSize int) (s *Sort) {
 func (s *Sort) Sort(inFileName, outFileName string) error { // 传入待排序的文件(文件每行一个int数字)，及排序后存放结果的文件
 	s.inFileName = inFileName
 	s.outFileName = outFileName
-	err := s.initSort()
+	err := s.initSort() // 生成临时的已排序的小文件
 	if err != nil {
 		return err
 	}
 
-	return s.mergeAll()
+	// 将已排序的小文件进行归并排序,排序的结果存放到 outFileName文件中
+	return s.mergeAll() //
 }
 
 func (s *Sort) initSort() (err error) { //
@@ -86,6 +87,7 @@ func (s *Sort) mergeAll() (err error) { //
 	}
 	if len(s.tmpFileNames) == 1 {
 		os.Rename(s.tmpFileNames[0], s.outFileName)
+		return
 	}
 	var leftFileName string = s.tmpFileNames[0]
 	for _, rightFileName := range s.tmpFileNames[1:] {
